@@ -1,0 +1,81 @@
+<header class="page-head">
+  <h1>Modèles & méthodologie</h1>
+  <p class="muted">Ce que les modèles ont appris, et comment ils ont été comparés.</p>
+</header>
+
+<section class="card prose">
+  <h2>Protocole commun</h2>
+  <ul>
+    <li>
+      <strong>Données :</strong> le CSV <code>synthetic_4g_network_data.csv</code>, avec des mesures
+      horaires par cellule (trafic, utilisateurs actifs, RSRP, SINR, événement).
+    </li>
+    <li>
+      <strong>Tâche :</strong> prédire le trafic d'une cellule à l'heure <em>t</em> avec uniquement
+      ce qui est connu à <em>t-1</em> : historique du trafic, KPI radio de l'heure précédente et
+      calendrier.
+    </li>
+    @if (overview(); as o) {
+      <li>
+        <strong>Découpage chronologique :</strong> {{ o.dataset.train_rows }} lignes d'entraînement,
+        {{ o.dataset.valid_rows }} de validation (early stopping du LSTM) et
+        {{ o.dataset.test_rows }} de test. Tous les modèles sont évalués sur exactement les mêmes
+        heures de test.
+      </li>
+    }
+    <li>
+      <strong>Random Forest & XGBoost :</strong> variables tabulaires (lags du trafic à 1, 2, 3, 6,
+      12 et 24 h, moyennes glissantes, encodage cyclique de l'heure et du jour, KPI radio à H-1,
+      identifiant de cellule).
+    </li>
+    <li>
+      <strong>LSTM :</strong> séquence des 24 dernières heures (trafic, KPI radio, événements,
+      heure), à laquelle on ajoute le calendrier de l'heure cible et l'identifiant de cellule.
+    </li>
+    <li>
+      <strong>Références naïves :</strong> « même heure la veille » et « heure précédente ». Un
+      modèle utile doit faire mieux.
+    </li>
+  </ul>
+</section>
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Random Forest : variables les plus utiles</h2>
+    <p class="muted">Top 12, réduction d'impureté (en %).</p>
+    @if (rfChart(); as cfg) {
+      <app-chart
+        [config]="cfg"
+        [height]="340"
+        ariaLabel="Importance des variables du Random Forest"
+      />
+    }
+  </section>
+  <section class="card">
+    <h2>XGBoost : variables les plus utiles</h2>
+    <p class="muted">Top 12, gain moyen (en %).</p>
+    @if (xgbChart(); as cfg) {
+      <app-chart [config]="cfg" [height]="340" ariaLabel="Importance des variables de XGBoost" />
+    }
+  </section>
+</div>
+
+<section class="card">
+  <h2>LSTM : courbe d'apprentissage</h2>
+  @if (lossChart(); as cfg) {
+    <p class="muted">
+      Entraînement arrêté après {{ epochs() }} époques. Les poids retenus sont ceux de l'époque
+      {{ bestEpoch() }}, celle qui minimise l'erreur de validation.
+    </p>
+    <app-chart
+      [config]="cfg"
+      [height]="260"
+      ariaLabel="Erreur d'entraînement et de validation du LSTM par époque"
+    />
+  } @else {
+    <p class="muted">
+      Le LSTM n'a pas été entraîné : PyTorch n'est pas installé. Lancez
+      <code>installer.cmd</code> (ou <code>pip install torch</code>) puis réentraînez les modèles.
+    </p>
+  }
+</section>

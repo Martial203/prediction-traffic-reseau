@@ -1,0 +1,180 @@
+<header class="page-head">
+  <h1>Cellule {{ id() }}</h1>
+  <nav class="segmented" aria-label="Choix de la cellule">
+    @for (c of cells(); track c.id) {
+      <a [routerLink]="['/cells', c.id]" routerLinkActive="active" ariaCurrentWhenActive="page">{{
+        c.id
+      }}</a>
+    }
+  </nav>
+</header>
+
+@if (info(); as i) {
+  <section class="tiles">
+    <article class="tile">
+      <span class="tile-label">Trafic moyen</span>
+      <span class="tile-value">{{ i.mean_traffic | number: '1.0-0' }} <small>Mbps</small></span>
+      <span class="tile-sub">pic {{ i.peak_traffic | number: '1.0-0' }} Mbps</span>
+    </article>
+    <article class="tile">
+      <span class="tile-label">Utilisateurs actifs</span>
+      <span class="tile-value">{{ i.mean_users | number: '1.0-0' }}</span>
+      <span class="tile-sub">en moyenne par heure</span>
+    </article>
+    <article class="tile">
+      <span class="tile-label">Qualité radio</span>
+      <span class="tile-value">{{ i.mean_sinr | number: '1.1-1' }} <small>dB SINR</small></span>
+      <span class="tile-sub">RSRP moyen {{ i.mean_rsrp | number: '1.1-1' }} dBm</span>
+    </article>
+    <article class="tile">
+      <span class="tile-label">Événements</span>
+      <span class="tile-value">{{ i.congestion_hours + i.handover_hours }} <small>h</small></span>
+      <span class="tile-sub">
+        <span class="status critical"
+          ><span class="icon" aria-hidden="true">▲</span> {{ i.congestion_hours }} congestion</span
+        >
+        ·
+        <span class="status warning"
+          ><span class="icon" aria-hidden="true">◆</span> {{ i.handover_hours }} handover</span
+        >
+      </span>
+    </article>
+  </section>
+}
+
+@let s = series();
+@if (s.status === 'error') {
+  <div class="alert" role="alert">{{ s.message }}</div>
+}
+
+<section class="card">
+  <div class="card-head">
+    <div>
+      <h2>Trafic réel vs prédictions</h2>
+      <p class="muted">
+        Prédiction de chaque heure à partir des heures précédentes. Zone grisée = période de test,
+        jamais vue pendant l'entraînement.
+      </p>
+    </div>
+    <div class="segmented" role="group" aria-label="Plage affichée">
+      <button type="button" [class.active]="range() === 'test'" (click)="range.set('test')">
+        Période de test
+      </button>
+      <button type="button" [class.active]="range() === 'all'" (click)="range.set('all')">
+        Tout l'historique
+      </button>
+    </div>
+  </div>
+
+  <div class="chips" role="group" aria-label="Modèles affichés">
+    @for (m of models(); track m.id) {
+      <button
+        type="button"
+        class="chip"
+        [class.on]="visible().has(m.id)"
+        [attr.aria-pressed]="visible().has(m.id)"
+        (click)="toggle(m.id)"
+      >
+        <span class="swatch" [attr.data-model]="m.id"></span>{{ m.label }}
+      </button>
+    }
+  </div>
+
+  @if (mainChart(); as cfg) {
+    <app-chart [config]="cfg" [height]="380" ariaLabel="Trafic réel et trafic prédit par modèle" />
+  } @else {
+    <p class="muted">Chargement…</p>
+  }
+
+  @if (cellMetrics().length) {
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Modèle (test, {{ id() }})</th>
+            <th scope="col" class="num">RMSE</th>
+            <th scope="col" class="num">MAE</th>
+            <th scope="col" class="num">MAPE</th>
+            <th scope="col" class="num">R²</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (m of cellMetrics(); track m.id; let first = $first) {
+            <tr [class.best]="first">
+              <th scope="row">
+                <span class="swatch" [attr.data-model]="m.id"></span>{{ m.label }}
+                @if (first) {
+                  <span class="badge">meilleur ici</span>
+                }
+              </th>
+              <td class="num">{{ m.cell.rmse | number: '1.2-2' }}</td>
+              <td class="num">{{ m.cell.mae | number: '1.2-2' }}</td>
+              <td class="num">{{ m.cell.mape | number: '1.1-1' }} %</td>
+              <td class="num">{{ m.cell.r2 | number: '1.3-3' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <div>
+      <h2>Prévision des prochaines heures</h2>
+      <p class="muted">
+        Prévision récursive après la dernière mesure. Les KPI radio futurs sont estimés par le
+        profil horaire des 7 derniers jours ; la bande donne un ordre de grandeur de l'incertitude.
+      </p>
+    </div>
+    <div class="controls">
+      <label>
+        Modèle
+        <select (change)="forecastModel.set($any($event.target).value)">
+          @for (m of models(); track m.id) {
+            <option [value]="m.id" [selected]="m.id === forecastModel()">{{ m.label }}</option>
+          }
+        </select>
+      </label>
+      <label>
+        Horizon
+        <select (change)="horizon.set(+$any($event.target).value)">
+          @for (h of horizons; track h) {
+            <option [value]="h" [selected]="h === horizon()">{{ h }} h</option>
+          }
+        </select>
+      </label>
+    </div>
+  </div>
+
+  @let f = forecast();
+  @if (f.status === 'error') {
+    <div class="alert" role="alert">{{ f.message }}</div>
+  } @else if (forecastChart(); as cfg) {
+    @if (forecastSummary(); as fs) {
+      <p class="summary">
+        Trafic moyen prévu <strong>{{ fs.mean | number: '1.0-0' }} Mbps</strong> · pic attendu
+        <strong>{{ fs.peak | number: '1.0-0' }} Mbps</strong> le {{ fs.peakAt }}
+      </p>
+    }
+    <app-chart [config]="cfg" [height]="320" ariaLabel="Historique récent et prévision du trafic" />
+  } @else {
+    <p class="muted">Calcul de la prévision…</p>
+  }
+</section>
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Utilisateurs actifs</h2>
+    @if (usersChart(); as cfg) {
+      <app-chart [config]="cfg" [height]="200" ariaLabel="Utilisateurs actifs par heure" />
+    }
+  </section>
+  <section class="card">
+    <h2>SINR (dB)</h2>
+    @if (sinrChart(); as cfg) {
+      <app-chart [config]="cfg" [height]="200" ariaLabel="SINR par heure" />
+    }
+  </section>
+</div>

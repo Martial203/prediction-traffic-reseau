@@ -1,0 +1,25 @@
+<header class="topbar">
+  <a class="brand" routerLink="/">
+    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M4 18 L9 11 L13 14 L20 5"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </svg>
+    Trafic réseau 4G
+  </a>
+  <nav aria-label="Navigation principale">
+    <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"
+      >Vue d'ensemble</a
+    >
+    <a routerLink="/cells" routerLinkActive="active">Cellules</a>
+    <a routerLink="/models" routerLinkActive="active">Modèles</a>
+  </nav>
+</header>
+<main class="container">
+  <router-outlet />
+</main>

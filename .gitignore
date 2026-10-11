@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.zip
+*.pkl
+
+# Artefacts d'entraînement (régénérés par `python -m app.train`)
+backend/artifacts/
+
+# Jupyter
+.ipynb_checkpoints/

@@ -1,0 +1,10 @@
+pandas>=2.2
+numpy>=1.26
+scikit-learn>=1.5
+# scipy 1.18 est bloque par Smart App Control (Windows) : on reste sur 1.16.
+scipy==1.16.3
+xgboost>=2.1
+joblib>=1.4
+fastapi>=0.115
+uvicorn[standard]>=0.30
+# torch (LSTM) est installe a part depuis l'index CPU de PyTorch, voir installer.cmd.

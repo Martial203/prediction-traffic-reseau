@@ -1,0 +1,193 @@
+@let s = state();
+@if (s.status === 'loading') {
+  <p class="muted">Chargement des résultats…</p>
+} @else if (s.status === 'error') {
+  <div class="alert" role="alert">{{ s.message }}</div>
+}
+
+@if (data(); as d) {
+  <header class="page-head">
+    <h1>Vue d'ensemble</h1>
+    <p class="muted">
+      {{ d.overview.dataset.rows | number: '1.0-0' }} mesures horaires ·
+      {{ d.overview.dataset.cells.length }} cellules · du
+      {{ d.overview.dataset.start | date: 'dd/MM/yyyy' }} au
+      {{ d.overview.dataset.end | date: 'dd/MM/yyyy' }}. Test sur les
+      {{ d.overview.dataset.test_ratio * 100 }} % les plus récents (à partir du
+      {{ d.overview.dataset.test_start | date: "dd/MM 'à' HH'h'" }}).
+    </p>
+  </header>
+
+  <section class="tiles">
+    @if (best(); as b) {
+      <article class="tile">
+        <span class="tile-label">Meilleur modèle</span>
+        <span class="tile-value">{{ b.label }}</span>
+        <span class="tile-sub"
+          >RMSE {{ b.metrics.rmse | number: '1.1-1' }} Mbps · R²
+          {{ b.metrics.r2 | number: '1.2-2' }}</span
+        >
+      </article>
+      <article class="tile">
+        <span class="tile-label">Erreur relative moyenne</span>
+        <span class="tile-value">{{ b.metrics.mape | number: '1.1-1' }} %</span>
+        <span class="tile-sub">MAPE du {{ b.label }}</span>
+      </article>
+    }
+    @if (gainVsNaive(); as g) {
+      <article class="tile">
+        <span class="tile-label">Gain vs naïf saisonnier</span>
+        <span class="tile-value"
+          >{{ g > 0 ? '−' : '+' }}{{ (g > 0 ? g : -g) | number: '1.0-0' }} %</span
+        >
+        <span class="tile-sub">d'erreur (RMSE) par rapport à « même heure la veille »</span>
+      </article>
+    }
+    <article class="tile">
+      <span class="tile-label">Trafic moyen / pic</span>
+      <span class="tile-value"
+        >{{ d.overview.kpis.mean_traffic | number: '1.0-0' }} <small>Mbps</small></span
+      >
+      <span class="tile-sub">
+        pic {{ d.overview.kpis.peak_traffic | number: '1.0-0' }} Mbps ·
+        <span class="status critical"
+          ><span class="icon" aria-hidden="true">▲</span>
+          {{ d.overview.kpis.events['congestion'] || 0 }} h de congestion</span
+        >
+      </span>
+    </article>
+  </section>
+
+  <section class="card">
+    <h2>Comparaison des modèles</h2>
+    <p class="muted">
+      Même jeu de test pour tous : prédiction de l'heure suivante, cellule par cellule. Les deux
+      références naïves (en gris) donnent le niveau à battre.
+    </p>
+    @if (rmseChart(); as cfg) {
+      <app-chart
+        [config]="cfg"
+        [height]="220"
+        ariaLabel="RMSE par modèle, du meilleur au moins bon"
+      />
+    }
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Modèle</th>
+            <th scope="col" class="num">RMSE</th>
+            <th scope="col" class="num">MAE</th>
+            <th scope="col" class="num">MAPE</th>
+            <th scope="col" class="num">R²</th>
+            <th scope="col" class="num">Entraînement</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (m of ranked(); track m.id) {
+            <tr [class.best]="isBest(m.id)">
+              <th scope="row">
+                <span class="swatch" [attr.data-model]="m.id"></span>{{ m.label }}
+                @if (isBest(m.id)) {
+                  <span class="badge">meilleur</span>
+                }
+                @if (m.kind === 'baseline') {
+                  <span class="badge ghost">référence</span>
+                }
+              </th>
+              <td class="num">{{ m.metrics.rmse | number: '1.2-2' }}</td>
+              <td class="num">{{ m.metrics.mae | number: '1.2-2' }}</td>
+              <td class="num">{{ m.metrics.mape | number: '1.1-1' }} %</td>
+              <td class="num">{{ m.metrics.r2 | number: '1.3-3' }}</td>
+              <td class="num">
+                {{ m.kind === 'ml' ? (m.fit_seconds | number: '1.1-1') + ' s' : '—' }}
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="grid-2">
+    <section class="card">
+      <h2>Erreur par cellule</h2>
+      <p class="muted">
+        RMSE (Mbps) de chaque modèle, par cellule. Cliquez une cellule pour le détail.
+      </p>
+      @if (cellChart(); as cfg) {
+        <app-chart [config]="cfg" [height]="260" ariaLabel="RMSE par cellule et par modèle" />
+      }
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Cellule</th>
+              @for (m of mlModels(); track m.id) {
+                <th scope="col" class="num">{{ m.label }}</th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (cell of cells(); track cell) {
+              <tr>
+                <th scope="row">
+                  <a [routerLink]="['/cells', cell]">{{ cell }}</a>
+                </th>
+                @for (m of mlModels(); track m.id) {
+                  <td class="num">{{ d.byCell[m.id][cell].rmse | number: '1.2-2' }}</td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Erreur selon l'état du réseau</h2>
+      <p class="muted">
+        RMSE (Mbps) selon l'événement survenu à l'heure prédite. Peu d'heures de test sont
+        concernées par un handover ou une congestion : ces chiffres sont indicatifs.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Modèle</th>
+              @for (e of events; track e.id) {
+                <th scope="col" class="num">{{ e.label }}</th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (m of ranked(); track m.id) {
+              <tr>
+                <th scope="row">
+                  <span class="swatch" [attr.data-model]="m.id"></span>{{ m.label }}
+                </th>
+                @for (e of events; track e.id) {
+                  <td class="num">
+                    @if (d.byEvent[m.id][e.id]; as em) {
+                      {{ em.rmse | number: '1.2-2' }}
+                    } @else {
+                      —
+                    }
+                  </td>
+                }
+              </tr>
+            }
+          </tbody>
+          <tfoot>
+            <tr>
+              <th scope="row" class="muted">Heures de test</th>
+              @for (e of events; track e.id) {
+                <td class="num muted">{{ d.byEvent[ranked()[0].id][e.id]?.n ?? 0 }}</td>
+              }
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
+  </div>
+}
